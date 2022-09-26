@@ -1,0 +1,14 @@
+<!-- 警报和引用插件 -->
+
+- Type: [!NOTE] | [!TIP] | [!WARNING] | [!ATTENTION]
+- style：callout | flat
+- label: any text
+
+> [!TIP|style:flat|label:My own heading]
+> xxx
+
+
+<!-- 自动编号插件 -->
+
+@autoHeader:2.1.1.1.1
+

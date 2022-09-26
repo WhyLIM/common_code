@@ -1,0 +1,29 @@
+# 初始化 git 仓库
+git init
+
+# 关联远程仓库
+git remote add origin git@github.com:WhyLIM/CBD.git
+
+# 添加到暂存区
+git add file
+
+# 提交到工作区
+git commit -m "message"
+
+# 提交到远程仓库
+# 第一次提交
+git push -u origin 分支
+# 后续不需要 -u
+git push origin 分支
+
+
+# 目前 git 只能上传到 master 分支，main 会报错，通过合并分支解决
+# 本地创建 main 分支
+git checkout -b main
+# 查看分支
+git branch
+# 将 master 分支合并到 main 上
+git merge master
+# git pull origin main 会报错：refusing to merge unrelated histories
+git pull origin main --allow-unrelated-histories
+git push origin main

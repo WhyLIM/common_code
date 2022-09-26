@@ -1,0 +1,16 @@
+
+# 去水
+remove solvent
+
+# 选择残基
+# 按残基名
+select XXX,resn IPRO
+# 按残基编号
+select XXX,resi 1+3+5...
+# 选择除3-10号残基外的所有残基
+select XXX,not resi 3-10
+# 选择212GLU残基的Cα原子
+select XXX,resi 212 and name C
+
+# 选中残基获取坐标
+centerofmass sele

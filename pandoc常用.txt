@@ -1,0 +1,99 @@
+# 安装方法
+conda install pandoc=2.12
+sudo apt update
+sudo apt install texlive-full
+
+sudo apt install pandoc-citeproc
+# 或
+sudo apt install haskell-platform
+cabal v2-update
+cabal v2-install --install-method=copy pandoc-crossref pandoc-citeproc
+
+sudo apt install python3-pip
+pip3 install pandoc-fignos pandoc-tablenos pandoc-eqnos
+pip3 install --upgrade pandoc-fignos pandoc-tablenos pandoc-eqnos
+
+# 环境变量
+alias pandoc='~/anaconda3/bin/pandoc'
+export PATH="$PATH:~/.cabal/bin/"
+export PATH="$PATH:~/.local/bin/"
+
+# yaml配置
+# 两种方式应用：md头部；yaml文件
+# 头部：
+---
+bibliography: [ref.bib]
+fignos-cleveref: True
+fignos-plus-name: 图
+fignos-caption-name: 图
+tablenos-cleveref: True
+tablenos-plus-name: 表
+tablenos-caption-name: 表
+eqnos-cleveref: True
+eqnos-plus-name: 公式
+eqnos-star-name: 公式
+title: 从大数据到复杂网络：药物-靶标相互作用网络的构建与分析
+author: 苏州大学 李旻
+
+# 这个参数好像没用
+numbersections: True
+
+# 下面的图标前缀有点问题，可能是由于版本
+title: "The Document Title"
+author: [Example Author, Another Author]
+date: "2022-03-13"
+keywords: [Markdown, Example]
+numbersections: true          # true 表示给文中的部分编号，默认值为 false
+subparagraph: yes             # 要在 LaTeX head 里用 titlesec 这个包，必须加这一行
+fontsize: 12pt                # 指定字号大小，默认接受 10pt、11pt、12pt
+toc: true                     # 生成目录
+toc-title: "目录"             # 指定目录标题
+lot: true                     # 生成表格目录
+lof: true                     # 生成图片目录
+tableTitle: "表"      # 表格标题的前缀，pandoc-crossref 与 pandoc-tablenos 中可用
+figureTitle: "图"     # 图片标题的前缀，pandoc-crossref 与 pandoc-fignos 中可用
+tabPrefix: "表"       # 文中对表格引用的前缀，pandoc-crossref 可用
+figPrefix: "表"       # 文中对图片引用的前缀，pandoc-crossref 可用
+header-includes:      # 要加进 LaTeX 文件的命令，建议放在一个单独的 preamble 文件里
+---
+# 文件引用：
+--metadata-file=metadata.yaml
+
+--reference-doc word模板
+--toc 加目录
+--number-sections 标题自动编号
+-M 添加的Reference是不计入编号的
+--listings 生成代码块
+如果图片引用和引文引用同时使用，需要把--filter pandoc-crossref放在--citeproc之前
+-M chapters
+-M figureTitle="图" -M figPrefix="图"
+-M tableTitle="表" -M tblPrefix="表"
+
+# 常用参考文献引用格式
+elsevier-harvard.csl
+china-national-standard-gb-t-7714-2015-numeric.csl
+
+# 转word
+pandoc --filter pandoc-crossref --citeproc --filter pandoc-fignos --filter pandoc-tablenos --bibliography=ref.bib --csl=china-national-standard-gb-t-7714-2015-numeric.csl --reference-doc=template.docx -M reference-section-title="参考文献" --number-sections test.md -o test.docx
+
+# 转pdf
+# 常用模板
+pm-template.tex
+eisvogel.tex
+
+pandoc --citeproc --filter pandoc-fignos --filter pandoc-tablenos --bibliography=../ref.bib --csl=china-national-standard-gb-t-7714-2015-numeric.csl --template=eisvogel.tex --pdf-engine=xelatex -M reference-section-title="参考文献"  ChIP-Seq.md -o test.pdf --listings --toc
+
+# 自用
+# --filter pandoc-crossref 不知道什么原因用不了
+# --bibliography=ref.bib 可以不加
+pandoc --filter pandoc-fignos --filter pandoc-tablenos --citeproc --csl=/mnt/d/Study/Tech/Templates/china-national-standard-gb-t-7714-2015-numeric.csl -M reference-section-title="参考文献" --number-sections test.md -o test.docx
+
+pandoc --filter pandoc-fignos --filter pandoc-tablenos --filter pandoc-eqnos --citeproc --csl=/mnt/d/Study/Tech/Templates/china-national-standard-gb-t-7714-2015-numeric.csl -M reference-section-title="参考文献" --number-sections test.md -o test.docx
+
+# 英文
+pandoc --filter pandoc-fignos --filter pandoc-tablenos --filter pandoc-eqnos --citeproc --csl=/mnt/d/Study/Tech/Templates/china-national-standard-gb-t-7714-2015-numeric.csl -M reference-section-title="REFERENCES" --number-sections --reference-doc=/mnt/d/Study/Tech/Templates/template.docx article.md -o article.docx
+
+--reference-doc=/mnt/d/Study/Tech/Templates/template.docx
+
+# 替换
+, et al

@@ -1,0 +1,17 @@
+# R packages I need:
+install.packages("BiocManager")
+BiocManager::install("clusterProfiler")
+BiocManager::install("org.Hs.eg.db")
+BiocManager::install("tidyverse")
+BiocManager::install("ggplot2")
+BiocManager::install("ggpubr")
+BiocManager::install("limma")
+BiocManager::install("do")
+
+BiocManager::install("devtools")
+library(devtools)
+BiocManager::install("supraHex")
+BiocManager::install("Rgraphviz")
+devtools::install_github("wf-frank2019/ne.PCA")
+BiocManager::install("biomaRt")
+devtools::install_github("windforclouds/PSV2N")
