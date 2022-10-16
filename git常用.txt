@@ -25,9 +25,11 @@ git branch --set-upstream-to=origin/remote_branch  your_branch
 # 查看分支
 git branch
 # 切换分支
-git checkout a
-# 合并分支 b 到当前分支
-git merge b
+git checkout br
+# 创建并切换分支
+git checkout -b br
+# 合并分支 br 到当前分支
+git merge br
 # 删除本地分支
 git branch -D br
 # 删除远程分支
