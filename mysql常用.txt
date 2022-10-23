@@ -38,3 +38,12 @@ CREATE TABLE IF NOT EXISTS `test` (
 SHOW CREATE DATABASE mysql
 SHOW CREATE TABLE test
 DESC test
+
+
+-- WordPress 网站迁移
+UPDATE wp_options SET option_value = replace(option_value, 'www.limina.top', 'blog.limina.top') WHERE option_name = 'home' OR option_name = 'siteurl';
+UPDATE wp_posts SET post_content = replace(post_content, 'www.limina.top', 'blog.limina.top');
+UPDATE wp_postmeta SET meta_value = replace(meta_value, 'www.limina.top', 'blog.limina.top');
+UPDATE wp_comments SET comment_content = replace(comment_content , 'www.limina.top', 'blog.limina.top');
+UPDATE wp_comments SET comment_author_url = replace(comment_author_url, 'www.limina.top', 'blog.limina.top') ;
+UPDATE wp_posts SET guid = replace(guid,'www.limina.top','blog.limina.top');
