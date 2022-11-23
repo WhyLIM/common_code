@@ -1,0 +1,27 @@
+
+sudo apt install dirmngr gnupg apt-transport-https ca-certificates software-properties-common
+# 添加 key
+sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
+# 添加 CRAN 软件源，Ubuntu 20.04 为 focal，各版本不同
+sudo add-apt-repository 'deb https://cloud.r-project.org/bin/linux/ubuntu focal-cran40/'
+# 安装 R
+sudo apt install r-base
+
+
+# 常用 R 包:
+install.packages("BiocManager")
+BiocManager::install("clusterProfiler")
+BiocManager::install("org.Hs.eg.db")
+BiocManager::install("tidyverse")
+BiocManager::install("ggplot2")
+BiocManager::install("ggpubr")
+BiocManager::install("limma")
+BiocManager::install("do")
+
+BiocManager::install("devtools")
+library(devtools)
+BiocManager::install("supraHex")
+BiocManager::install("Rgraphviz")
+devtools::install_github("wf-frank2019/ne.PCA")
+BiocManager::install("biomaRt")
+devtools::install_github("windforclouds/PSV2N")

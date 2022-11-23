@@ -1,0 +1,8 @@
+# Windows 安装 conda 添加环境变量
+D:\Anaconda3
+D:\Anaconda3\Script
+D:\Anaconda3\Library\bin
+
+# 服务器安装 R
+sudo ln -s /opt/R/${R_VERSION}/bin/R /usr/bin/R
+sudo ln -s /opt/R/${R_VERSION}/bin/Rscript /usr/bin/Rscript
