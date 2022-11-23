@@ -18,6 +18,15 @@ BiocManager::install("ggpubr")
 BiocManager::install("limma")
 BiocManager::install("do")
 
+# 测试
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(limma)
+library(do)
+
 BiocManager::install("devtools")
 library(devtools)
 BiocManager::install("supraHex")
@@ -25,3 +34,12 @@ BiocManager::install("Rgraphviz")
 devtools::install_github("wf-frank2019/ne.PCA")
 BiocManager::install("biomaRt")
 devtools::install_github("windforclouds/PSV2N")
+
+
+# 很多 R 包在 linux 上的需求
+sudo apt install libfontconfig1-dev
+sudo apt install libcurl3-dev
+sudo apt install libxml2-dev
+sudo apt install libssl-dev
+sudo apt install cmake
+sudo apt install libgit2-dev
