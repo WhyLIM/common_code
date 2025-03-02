@@ -1,2 +1,0 @@
-# 更新基础conda，新版本conda使用起来更快
-conda update -n base -c defaults conda

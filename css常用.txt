@@ -1,9 +1,0 @@
-. {
-    /*带滚动条的表格*/
-    overflow-y: scroll;
-    display: block;
-    height: 500px;
-    width: calc(100% + 1em);
-    /*一个好看的渐变色*/
-    background: linear-gradient(to bottom right, #EAD6EE, #A0F1EA);
-}
