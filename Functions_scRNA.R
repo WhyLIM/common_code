@@ -151,80 +151,74 @@ plot_seurat_dim <- function(seurat_obj,
 # 检测每个 marker 基因集的表达情况（Dotplot）的函数
 plot_markers <- function(seurat_obj, marker_list, group.by) {
   library(ggsc)
+  
   lapply(names(marker_list), function(cell_type) {
-    # 提取三类标记基因
-    genes_positive <- marker_list[[cell_type]]$positive
-    genes_negative <- marker_list[[cell_type]]$negative
+    # 提取该细胞类型所有标记基因
+    genes <- marker_list[[cell_type]]
     
-    # 合并所有基因并检查存在性
-    all_genes <- c(genes_positive, genes_negative)
-    valid_genes <- all_genes[all_genes %in% rownames(seurat_obj)]
+    # 验证基因是否存在
+    valid_genes <- genes[genes %in% rownames(seurat_obj)]
     if (length(valid_genes) == 0) {
       message("Skipping ", cell_type, ": no valid genes found.")
       return(NULL)
     }
     
-    # 使用原始基因名调用 sc_dot
+    # 绘图
     p <- sc_dot(
       object = seurat_obj,
       features = valid_genes,
-      group.by = group.by, 
-      # col.min = 0,
-      # col.max = 3,
+      group.by = group.by,
       dot.scale = 6
-    ) + scale_color_gradient(low = "#4d8076", high = "red")
-    
-    # 添加分类信息到绘图数据
-    p$data$category <- case_when(
-      p$data$features %in% genes_positive ~ "Positive",
-      p$data$features %in% genes_negative ~ "Negative"
-    )
-    
-    # 分面绘图
-    p <- p + 
-      facet_grid(category ~ ., scales = "free_y", space = "free_y") +
+    ) + 
+      scale_color_gradient(low = "#4d8076", high = "red") +
+      ggtitle(cell_type) +
       theme(
-        strip.text.y = element_text(angle = 0),
-        axis.text.x = element_text(angle = 0)
-      ) +
-      ggtitle(cell_type)
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(face = "bold")
+      )
     
-    # 动态调整尺寸
-    if (length(valid_genes) == 1) {
-      h <- 0.2 * length(p$data$category)
-      w <- 2.5 * length(valid_genes) + 2
-    } else if (length(valid_genes) == 2) {
-      h <- 0.1 * length(p$data$category)
-      w <- 2 * length(valid_genes) + 2
-    } else {
-      h <- 0.07 * length(p$data$category)
-      w <- 1.3 * length(valid_genes) + 2
-    }
+    # 动态尺寸调整规则
+    n_genes <- length(valid_genes)
+    base_width <- max(3, n_genes * 1.2)  # 每个基因至少 1.5 英寸宽度
+    base_height <- max(4, n_genes * 0.3) # 高度与基因数量相关
     
     # 保存PDF
     ggsave(
       filename = paste0("check_", gsub("[/]", "_", cell_type), ".pdf"),
       plot = p,
-      width = w,
-      height = h,
+      width = base_width,
+      height = base_height,
       limitsize = FALSE
     )
+    
+    return(p)
   })
 }
 # 使用示例：
 # marker_list 的格式：
 # marker_genes <- list(
-#   # ========== 内皮细胞 ==========
-#   Endothelial_Cells = list(
-#     positive = c("Pecam1", "Vwf", "Cd34", "Emcn"),
-#     negative = c("Epcam", "Acta2", "Krt8", "Krt5")   # 合并原阴性和低表达标记
-#   ),
-#   
-#   # ========== 成纤维细胞 ==========
-#   Fibroblasts = list(
-#     positive = c("Col1a1", "Col3a1", "Col6a5", "Gsn", "Dcn", "Fap"),
-#     negative = c("Epcam", "Pecam1", "Krt18", "Ptprc") # 合并原阴性和低表达标记
-#   )
+#   # T 细胞
+#   T_Cell = c("Cd3g","Cd3e","Cd4","Cd8a","Klrd1"),
+#   # NK 细胞
+#   NK_Cell = c("Ncr1", "Klrb1a", "Klrk1", "Gzmb", "Prf1"),
+#   # 浆细胞
+#   Plasma = c('Sdc1', 'Prdm1', 'Xbp1', 'Tnfrsf17'),
+#   # B 细胞
+#   B_Cell = c("Cd19", "Cd79a", "Cd79b", "Ms4a1"),
+#   # 单核/巨噬细胞
+#   Mac_Mono = c("Adgre1","Csf1r","Trem2", "Msr1"),
+#   # 树突状细胞
+#   DCs = c("Siglech", "Clec9a", "Cd209a", "Flt3"),
+#   # 中性粒细胞
+#   Neu = c("S100a8","S100a9",'Ly6g', 'Cxcr2', 'Cd177'),
+#   # 肥大细胞
+#   Mast_Cell = c("Fcer1a", "Ms4a2", "Cpa3", "Mcpt8"),
+#   # 内皮细胞
+#   Endothelial_Cells = c("Kdr","Emcn","Pecam1","Sparc"),
+#   # 红系祖细胞
+#   Erythroid_Progenitor = c("Gata1","Klf1", "Epor", "Slc4a1", "Tspo2"),
+#   # 成熟红细胞
+#   Erythrocyte = c("Hba-a1","Hba-a2","Gypa")
 # )
 # plot_markers(seurat_object, marker_genes, group.by = "RNA_snn_res.0.8")
 
