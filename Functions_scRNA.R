@@ -78,6 +78,7 @@ plot_boxpair <- function(seurat_object, markers, target_genes, group_col = "grou
 plot_seurat_dim <- function(seurat_obj, 
                             reduction = "umap", 
                             ident = "orig.ident", 
+                            pointsize = 1, 
                             height = 6, 
                             width = 7, 
                             filename = "Dimplot",
@@ -114,7 +115,7 @@ plot_seurat_dim <- function(seurat_obj,
   }
   
   # 生成可视化图
-  p <- sc_dim(seurat_obj, reduction = reduction) + 
+  p <- sc_dim(seurat_obj, reduction = reduction, pointsize = pointsize) + 
     sc_dim_geom_label(geom = ggrepel::geom_text_repel, 
                       color = label_color, 
                       bg.color = 'white', 
@@ -138,11 +139,11 @@ plot_seurat_dim <- function(seurat_obj,
   return(list(plot = p, color_map = color_map))
 }
 # 用法示例：
-# plot_seurat_dim(seurat_object, ident = "RNA_snn_res.0.8", filename = "UMAP_Cluster")
+# plot_seurat_dim(seurat_object, ident = "RNA_snn_res.0.8", filename = "UMAP_cluster")
 # 优先级顺序：name_to_color > custom_colors >  viridis 调色板
 # name_to_color = c("Fibroblasts" = "blue", "Other Cells" = "#FF5733")
 # plot_seurat_dim(seurat_object, reduction = "umap", ident = "RNA_snn_res.0.8", 
-#                 height = 6, width = 7, filename = "UMAP_Cluster",
+#                 height = 6, width = 7, filename = "UMAP_cluster",
 #                 custom_colors = NULL, name_to_color = NULL, 
 #                 label_color = '#5D478B', legend_size = 5, color_palette = 'H',
 #                 title = "", legend_title = ident)
@@ -223,12 +224,116 @@ plot_markers <- function(seurat_obj, marker_list, group.by) {
 # plot_markers(seurat_object, marker_genes, group.by = "RNA_snn_res.0.8")
 
 
+# 绘制基因集的小提琴图的函数
+vlnplot_gene_set <- function(seurat_obj, 
+                             genes, 
+                             filename, 
+                             width = NULL, 
+                             height = NULL, 
+                             ncol = 3, 
+                             mapping = NULL,
+                             group_colors = NULL) {
+  
+  # 过滤存在于 Seurat 对象中的基因
+  valid_genes <- intersect(genes, rownames(seurat_obj))
+  
+  if (length(valid_genes) == 0) {
+    message(paste("No valid genes found for", filename))
+    return(NULL)
+  }
+  
+  # 计算行数和默认尺寸
+  nrow <- ceiling(length(valid_genes) / ncol)
+  
+  # 创建绘图对象
+  if (!is.null(mapping)) {
+    p <- sc_violin(seurat_obj, 
+                   features = valid_genes, 
+                   .fun = function(d) dplyr::filter(d, value > 0), 
+                   mapping = mapping, 
+                   ncol = ncol) +
+      guides(x = guide_axis(angle = -45)) +
+      stat_compare_means(label = "p.signif")
+    
+    # 自动计算宽度
+    if (is.null(width)) {
+      x_var <- rlang::as_name(mapping$x)
+      n_levels <- length(unique(seurat_obj@meta.data[[x_var]]))
+      width <- 0.8 * n_levels * ncol
+    }
+  } else {
+    p <- sc_violin(seurat_obj, 
+                   features = valid_genes, 
+                   .fun = function(d) dplyr::filter(d, value > 0),
+                   ncol = ncol) +
+      guides(x = guide_axis(angle = -45)) +
+      stat_compare_means(label = "p.signif")
+    
+    # 默认宽度
+    if (is.null(width)) {
+      n_levels <- length(levels(Idents(seurat_obj)))
+      width <- 0.8 * n_levels * ncol
+    }
+  }
+  
+  # 如果提供了group_colors，添加颜色标度
+  if (!is.null(group_colors)) {
+    p <- p + scale_fill_manual(values = group_colors)
+  }
+  
+  # 自动计算高度
+  if (is.null(height)) {
+    height <- 4 * nrow
+  }
+  
+  # 保存图片
+  ggsave(paste0(filename, ".png"), plot = p, width = width, height = height, limitsize = FALSE)
+  ggsave(paste0(filename, ".pdf"), plot = p, width = width, height = height, limitsize = FALSE)
+  
+  return(p)
+}
+# 使用示例：
+## 节律基因 GO:0048511，基因太多了（300+）
+# genes_CR <- c("Arntl", "Clock", "Cry1", "Cry2", "Csnk1d", "Csnk1e", "Npas2", "Nr1d1", "Per1", "Per2", "Per3")
+## 铁硫簇组装基因 GO:0016226
+# genes_FS <- c("Abcb7", "AK157302", "Bola2", "Bola3", "Ciao1", "Ciao2a", "Ciao2b", "Ciao3", 
+#               "Ciapin1", "Fdx2", "Fxn", "Glrx3", "Glrx5", "Hscb", "Hspa9", "Iba57", "Isca1", 
+#               "Isca2", "Iscu", "Lyrm4", "Ndor1", "Ndufab1", "Ndufab1-ps", "Nfs1", "Nfu1", 
+#               "Nubp1", "Nubp2", "Nubpl", "Xdh")
+## 定义颜色
+# group_colors <- c(D = "#dd5633", L = "#5fb9d4")
+## 定义 mapping
+# mapping <- aes(x = ftype, y = value, fill = mfield)
+#
+## 单次绘图
+# vlnplot_gene_set(seurat_object, genes = genes_CR, filename = "Vlnplot_CR", ncol = 4, 
+#                  mapping = mapping, group_colors = group_colors)
+#
+## 批量绘图
+## 定义基因集列表
+# gene_sets <- list(
+#   CR = list(genes = genes_CR, filename = "Vlnplot_CR", ncol = 4, mapping = mapping, group_colors = group_colors),
+#   FS = list(genes = genes_FS, filename = "Vlnplot_FS", ncol = 6, mapping = mapping, group_colors = group_colors)
+# )
+## 批量绘图
+# lapply(gene_sets, function(x) {
+#   vlnplot_gene_set(seurat_object, 
+#                    genes = x$genes, 
+#                    filename = x$filename, 
+#                    width = x$width, 
+#                    height = x$height, 
+#                    ncol = x$ncol, 
+#                    mapping = x$mapping, 
+#                    group_colors = group_colors)
+# })
+
+
 # 自定义颜色
 custom_colors <- c("#5560AC", "#FCBB44", "#08306B", "#D3F0F2", "#67000d", 
                    "#ED6F6E", "#1F4527", "#D2D6F5", "#0D8B43", "#F4EEAC", 
-                   "#304E7E", "#FED98E", "#4758A2", "#E4E45F", "#C9DCC4", 
-                   "#37939A", "#F28147", "#619CD9", "#EDADC5", "#F1766D", 
-                   "#6CBEC3", "#ADAFB1", "#9ECAE1", "#68BD48", "#D8D9DA", 
-                   "#7A70B5", "#ECB884", "#92A5D1", "#E08D8B", "#9584C1", 
-                   "#AAD7C8", "#F1AEA7", "#7C9895", "#C5DFF4", "#CEDBD2", 
+                   "#FED98E", "#4758A2", "#E4E45F", "#C9DCC4", "#37939A", 
+                   "#F28147", "#619CD9", "#EDADC5", "#F1766D", "#6CBEC3", 
+                   "#ADAFB1", "#9ECAE1", "#68BD48", "#D8D9DA", "#7A70B5", 
+                   "#ECB884", "#92A5D1", "#E08D8B", "#9584C1", "#AAD7C8", 
+                   "#F1AEA7", "#7C9895", "#C5DFF4", "#304E7E", "#CEDBD2", 
                    "#AF8CBB", "#FAC074", "#9D9ECD", "#9FD4AE", "#D9B9D4")
