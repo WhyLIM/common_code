@@ -21,8 +21,8 @@ basic_qc <- function(seurat_obj, dir = NULL) {
 
 
 # 绘制组间表达差异配对箱线图的函数
-plot_boxpair <- function(seurat_object, markers, target_genes, group_col = "group", save_plot = TRUE, 
-                         filename = "boxpair", title = "", width = 4, height = 6) {
+plot_boxpair <- function(seurat_object, markers, target_genes, group = "group", save_plot = TRUE, 
+                         filename = "boxpair", title = "", width = 4, height = 6, group_colors = NULL) {
   library(dplyr)
   library(tidyr)
   library(ggpubr)
@@ -39,23 +39,27 @@ plot_boxpair <- function(seurat_object, markers, target_genes, group_col = "grou
   target_degs <- intersect(valid_genes, rownames(degs))
   
   # 3. 提取表达矩阵及相关元数据（只使用 group 信息）
-  expr_data <- FetchData(seurat_object, vars = c(valid_genes, group_col))
+  expr_data <- FetchData(seurat_object, vars = c(valid_genes, group))
   
   # 4. 计算每个组内各目标基因的平均表达值，并转换为长格式数据
   avg_exp <- expr_data %>%
-    group_by(across(all_of(group_col))) %>%
+    group_by(across(all_of(group))) %>%
     summarise(across(all_of(valid_genes), ~ mean(.x, na.rm = TRUE)), .groups = "drop") %>%
     pivot_longer(cols = all_of(valid_genes),
                  names_to = "gene",
                  values_to = "expression")
   
   # 5. 绘制成对图
-  p <- ggpaired(avg_exp, x = group_col, y = "expression", color = group_col, palette = "npg", point.size = 3) +
-    stat_compare_means(aes_string(x = group_col, y = "expression"), paired = TRUE, method = "t.test", size = 4) +
+  p <- ggpaired(avg_exp, x = group, y = "expression", color = group, palette = "npg", point.size = 3) +
+    stat_compare_means(aes_string(x = group, y = "expression"), paired = TRUE, method = "t.test", size = 4) +
     geom_text_repel(aes(label = gene), size = 4, box.padding = 0.5, point.padding = 0.3, segment.color = "grey50",
                     color = ifelse(avg_exp$gene %in% target_degs, "#8e44ad", "black")) +
     labs(title = title, x = "Group", y = "Average Expression", color = "Group") +
     theme_classic()
+  
+  if (!is.null(group_colors)) {
+    p <- p + scale_color_manual(values = group_colors)
+  }
   
   # 显示图形
   print(p)
@@ -66,12 +70,154 @@ plot_boxpair <- function(seurat_object, markers, target_genes, group_col = "grou
     ggsave(filename = paste0(filename, ".png"), plot = p, width = width, height = height)
   }
   
-  # 返回绘图对象，方便后续调整
-  return(p)
 }
 # 用法示例：
+# group_colors <- c(D = "#dd5633", L = "#5fb9d4")
 # plot_boxpair(seurat_object, markers = markers, target_genes = genes_CR,
-#              group_col = "group", save_plot = T, filename = "boxpair_CR", width = 6, height = 8)
+#              group = "group", save_plot = T, filename = "boxpair_CR", 
+#              width = 6, height = 8, group_colors = group_colors)
+
+
+#' boxpair_gene_set
+#'
+#' 绘制指定基因集在多个细胞类型中的组间表达差异配对箱线图，并将图像保存为 PDF 和 PNG 文件。
+#'
+#' @param seurat_list      一个包含多个 Seurat 对象的列表，每个代表一个细胞类型。
+#' @param deg_list         一个与 seurat_list 对应的 DEG（差异表达）数据框列表，行为基因，必须包含 `p_val_adj` 列。
+#' @param genes            目标基因组成的字符向量，用于绘图。
+#' @param output_dir       字符串，指定图像保存的输出目录（建议为基因集命名的子文件夹，如 "boxpair_plots/CR"）。
+#' @param group            Seurat metadata 中的分组变量（例如 `"condition"` 或 `"group"`）。
+#' @param group_colors     一个命名颜色向量，例如 `c("Control" = "#4DBBD5", "Treatment" = "#E64B35")`，用于手动指定分组颜色。
+#' @param base_height      数值型，控制图像高度的基准值（单位：英寸），每个基因会增加一定高度。
+#' @param base_width       数值型，图像的宽度（单位：英寸）。
+#' @param save_plot        逻辑值，是否保存图像文件，默认为 TRUE。
+#'
+#' @return 无返回值（invisible NULL）。函数的主要作用是保存绘图文件。
+#'
+#' @examples
+#' gene_sets <- list(
+#'   CR = list(genes = genes_CR, output_dir = "boxpair_plots/CR", group = "mfield", group_colors = group_colors),
+#'   FS = list(genes = genes_FS, output_dir = "boxpair_plots/FS", group = "mfield", group_colors = group_colors)
+#' )
+#'
+#' # 批量绘图
+#' lapply(gene_sets, function(x) {
+#'   boxpair_gene_set(
+#'     seurat_list = seurat_cells,
+#'     deg_list = deg_list,
+#'     genes = x$genes,
+#'     output_dir = x$output_dir,
+#'     group = x$group,
+#'     group_colors = x$group_colors,
+#'     base_height = 0.5,
+#'     base_width = 6
+#'   )
+#' })
+#'
+boxpair_gene_set <- function(seurat_list, deg_list, genes, 
+                             output_dir = "boxpair_plots", 
+                             group = "group", 
+                             group_colors = NULL, 
+                             base_height = 0.5, 
+                             base_width = 6,
+                             save_plot = TRUE) {
+  
+  library(dplyr)
+  library(tidyr)
+  library(ggpubr)
+  library(ggrepel)
+  
+  # 自动提取基因集名称
+  gene_set_name <- basename(normalizePath(output_dir, mustWork = FALSE))
+  
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
+  
+  for (celltype in names(seurat_list)) {
+    seurat_obj <- seurat_list[[celltype]]
+    markers <- deg_list[[celltype]]
+    
+    valid_genes <- intersect(genes, rownames(seurat_obj))
+    if (length(valid_genes) == 0) {
+      message(paste0("[跳过] ", celltype, " 中无有效基因"))
+      next
+    }
+    
+    degs <- markers %>% filter(p_val_adj < 0.05)
+    target_degs <- intersect(valid_genes, rownames(degs))
+    
+    expr_data <- FetchData(seurat_obj, vars = c(valid_genes, group))
+    
+    avg_exp <- expr_data %>%
+      group_by(across(all_of(group))) %>%
+      summarise(across(all_of(valid_genes), ~ mean(.x, na.rm = TRUE)), .groups = "drop") %>%
+      pivot_longer(cols = all_of(valid_genes), names_to = "gene", values_to = "expression")
+    
+    file_prefix <- paste0(output_dir, "/boxpair_", gene_set_name, "_", gsub("[/ ]", "_", celltype))
+    title <- paste("Expression changes of", gene_set_name, "genes in", celltype)
+    height <- base_height * length(valid_genes) + 2
+    
+    p <- ggpaired(avg_exp, x = group, y = "expression", color = group, 
+                  point.size = 3, palette = if (is.null(group_colors)) "npg" else NULL) +
+      stat_compare_means(aes_string(x = group, y = "expression"), paired = TRUE, method = "t.test", size = 4) +
+      geom_text_repel(aes(label = gene), size = 4, box.padding = 0.5, point.padding = 0.3, segment.color = "grey50",
+                      color = ifelse(avg_exp$gene %in% target_degs, "#8e44ad", "black")) +
+      labs(title = title, x = "Group", y = "Average Expression", color = "Group") +
+      theme_classic()
+    
+    if (!is.null(group_colors)) {
+      p <- p + scale_color_manual(values = group_colors)
+    }
+    
+    if (save_plot) {
+      ggsave(filename = paste0(file_prefix, ".pdf"), plot = p, width = base_width, height = height)
+      ggsave(filename = paste0(file_prefix, ".png"), plot = p, width = base_width, height = height)
+    }
+  }
+}
+
+
+# 绘制基因集的基因表达图的函数
+featureplot_gene_set <- function(seurat_obj, 
+                                 genes, 
+                                 output_dir, 
+                                 file_prefix, 
+                                 base_width = 2, 
+                                 base_height = 2, 
+                                 ncol = 3) {
+  
+  # 过滤存在于 Seurat 对象中的基因
+  valid_genes <- intersect(genes, rownames(seurat_obj))
+  
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
+  
+  if (length(valid_genes) == 0) {
+    message(paste("No valid genes found for", file_prefix))
+    return(NULL)
+  }
+  
+  filename <- paste0(output_dir, "/featureplot_", file_prefix)
+  title <- paste("Expression of", file_prefix, "genes")
+  
+  # 计算行数和默认尺寸
+  nrow <- ceiling(length(valid_genes) / ncol)
+  
+  # 创建绘图对象
+  p <- sc_feature(seurat_obj, features = valid_genes, ncol = ncol) +
+    labs(title = title)
+  
+  # 计算宽度和高度
+  height <- base_height * nrow
+  width <- base_width * ncol
+  
+  # 保存图片
+  ggsave(paste0(filename, ".png"), plot = p, width = width, height = height, limitsize = FALSE)
+  ggsave(paste0(filename, ".pdf"), plot = p, width = width, height = height, limitsize = FALSE)
+  
+}
 
 
 # 绘制 UMAP/T-SNE 的函数
