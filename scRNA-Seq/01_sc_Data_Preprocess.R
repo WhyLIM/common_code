@@ -9,10 +9,10 @@ library(ggrepel)
 rm(list = ls())
 gc()
 
-# ======================================= 参数设置（可自定义） =======================================
-# 基础目录设置 - 只需修改这个根目录，其他目录会自动生成
+# ======================================= 参数设置 =======================================
+# 基础目录设置
 base_dir <- "~/scLC"
-project_name <- "W_Penis"  # 项目名称，可以修改
+project_name <- "W_Penis_test"  # 项目名称
 sample_info_file <- "sample_ID.csv"  # 样本信息文件
 
 # 样本选择条件
@@ -50,7 +50,7 @@ if (!dir.exists(project_dir)) {
 }
 
 # 设置工作目录
-setwd(resultdir)
+setwd(project_dir)
 
 # ======================================= 函数引入 =======================================
 source(file.path(scriptdir, "Functions_scRNA.R"))
@@ -71,55 +71,69 @@ for (cond_name in names(sample_conditions)) {
 sample_paths <- file.path(datadir, filtered_samples$production_ID)
 names(sample_paths) <- filtered_samples$production_ID
 
-# ======================================= 创建Seurat对象 =======================================
-message("创建Seurat对象...")
-seurat_list <- list()
+# ==================================== 创建Seurat对象 ====================================
+message("创建 Seurat 对象...")
 
+# 创建一个空列表来存储样本信息
+sample_info <- data.frame(production_ID = character(),
+                          cell_count = integer(),
+                          stringsAsFactors = FALSE)
+
+seurat_list <- list()
 for (name in names(sample_paths)) {
   path <- sample_paths[[name]]
-  message(paste("处理样本:", name, "路径:", path))
+  message(paste("读取样本:", name, "路径:", path))
   
   counts <- Read10X(data.dir = path, gene.column = 1)
   seurat_list[[name]] <- CreateSeuratObject(counts, project = name, min.cells = 3, min.features = 100)
+  
+  cell_count <- ncol(seurat_list[[name]])
+  message(paste("样本", name, "包含", cell_count, "个细胞"))
+  
+  sample_info <- rbind(sample_info, data.frame(production_ID = name, cell_count = cell_count))
 }
+
+# 打印所有样本的汇总信息
+message("样本汇总信息:")
+print(sample_info)
+
+# 保存到 CSV 文件
+sample_info <- sample_info %>% 
+  left_join(., filtered_samples %>% dplyr::select(production_ID, sample_name), by = c("production_ID")) %>% 
+  dplyr::select(production_ID, sample_name, cell_count)
+write.csv(sample_info, file = file.path(project_dir, "sample_cell_counts.csv"), row.names = FALSE)
+message("样本细胞数量已保存至 sample_cell_counts.csv")
 
 seurat_object <- merge(x = seurat_list[[1]], y = seurat_list[-1])
 
-# 清理内存
-rm(seurat_list)
-gc()
-
-# ======================================= 质控和过滤 =======================================
+# ====================================== 质控和过滤 ======================================
 message("执行质控和过滤...")
 # 基本质控
 seurat_object <- basic_qc(seurat_object, dir = project_dir)
 
-# 构建过滤条件
-filter_expr <- paste0(
-  "nFeature_RNA > ", qc_params$min_features, 
-  " & nFeature_RNA < ", qc_params$max_features,
-  " & nCount_RNA < ", qc_params$max_counts,
-  " & percent_mito < ", qc_params$max_mito_percent
-)
-
 # 应用过滤
-seurat_object <- subset(seurat_object, subset = eval(parse(text = filter_expr)))
+seurat_object <- subset(
+  seurat_object, 
+  subset = nFeature_RNA > qc_params$min_features & 
+    nFeature_RNA < qc_params$max_features & 
+    nCount_RNA < qc_params$max_counts & 
+    percent_mito < qc_params$max_mito_percent
+)
 
 # 生成过滤后的质控图
 p <- VlnPlot(seurat_object, group.by = "orig.ident", 
              features = c("nFeature_RNA", "nCount_RNA", "percent_mito", "percent_ribo", "percent_hb"), 
              ncol = 3, pt.size = 0)
-
 width_calc <- length(unique(seurat_object$orig.ident))/2 + 10
-ggsave(file.path(project_dir, "Vlnplot_mito_ribo_hb_filter.png"), p, width = width_calc, height = 10)
-ggsave(file.path(project_dir, "Vlnplot_mito_ribo_hb_filter.pdf"), p, width = width_calc, height = 10)
+ggsave(file.path(project_dir, "Vlnplot_filter.png"), p, width = width_calc, height = 10)
+ggsave(file.path(project_dir, "Vlnplot_filter.pdf"), p, width = width_calc, height = 10)
 
 # ======================================= 降维分析 =======================================
 message("执行数据标准化和降维...")
 # 标准化和降维
 seurat_object <- NormalizeData(seurat_object)
 seurat_object <- FindVariableFeatures(seurat_object)
-seurat_object <- ScaleData(seurat_object, verbose = FALSE)
+seurat_object <- ScaleData(seurat_object)
 seurat_object <- RunPCA(seurat_object, npcs = dim_reduction_params$npcs, verbose = FALSE)
 
 # 批次效应校正
@@ -134,8 +148,8 @@ ggsave(file.path(project_dir, "batch_effect_pca.png"), p1, width = 7, height = 5
 p2 <- DimPlot(seurat_object, reduction = "harmony", group.by = "orig.ident")
 ggsave(file.path(project_dir, "batch_effect_harmony.png"), p2, width = 7, height = 5)
 
-# ======================================= 聚类和UMAP =======================================
-message("执行聚类和UMAP降维...")
+# ======================================= 聚类和 UMAP =======================================
+message("执行聚类和 UMAP 降维...")
 # 寻找邻居
 seurat_object <- FindNeighbors(seurat_object, reduction = "harmony", dims = dim_reduction_params$dims_use)
 
@@ -145,67 +159,44 @@ for (res in clustering_resolutions) {
   seurat_object <- FindClusters(seurat_object, resolution = res)
 }
 
-# 运行UMAP
+# 运行 UMAP
 seurat_object <- RunUMAP(seurat_object, reduction = "harmony", dims = dim_reduction_params$dims_use)
 
 # ======================================= 添加元数据 =======================================
 message("添加样本元数据...")
 cmeta <- seurat_object@meta.data
+
+# 修正因子顺序
+for (res in clustering_resolutions) {
+  cluster_col <- paste0("RNA_snn_res.", res)
+  # 修正因子顺序（按数值排序）
+  cmeta[[cluster_col]] <- factor(
+    cmeta[[cluster_col]],
+    levels = sort(as.numeric(levels(cmeta[[cluster_col]])))
+  )
+  message(paste("已修正因子顺序:", cluster_col))
+}
 # 将 cmeta 的行名保存为一个新列
 cmeta <- cmeta %>% mutate(row_names = rownames(cmeta))
 cmeta <- cmeta %>%
   left_join(filtered_samples, by = c("orig.ident" = "production_ID")) %>% 
   column_to_rownames("row_names")
-seurat_object@meta.data <- cmeta
-
 # 转换因子变量
-factor_cols <- c("abbr", "mfield", "aging", "organ")
+factor_cols <- c("sample_name", "abbr", "mfield", "aging", "organ")
 for (col in factor_cols) {
-  if (col %in% colnames(seurat_object@meta.data)) {
-    seurat_object@meta.data[[col]] <- as.factor(seurat_object@meta.data[[col]])
+  if (col %in% colnames(cmeta)) {
+    cmeta[[col]] <- as.factor(cmeta[[col]])
   }
 }
+seurat_object@meta.data <- cmeta
 
 # ======================================= 可视化和保存结果 =======================================
 message("生成可视化结果并保存...")
-# 为每个聚类分辨率生成UMAP图
+# 为每个聚类分辨率生成 UMAP 图
 for (res_col in grep("RNA_snn_res", colnames(seurat_object@meta.data), value = TRUE)) {
   res_val <- sub(".*res\\.", "", res_col)
-  p <- DimPlot(seurat_object, reduction = "umap", group.by = res_col, label = TRUE) +
-    ggtitle(paste("Resolution:", res_val))
-  ggsave(file.path(project_dir, paste0("umap_res", res_val, ".png")), p, width = 10, height = 8)
+  plot_seurat_dim(seurat_object, ident = res_col, filename = paste0("UMAP_res", res_val), show_cellnum = T, title = paste("Resolution:", res_val))
 }
 
-# 按样本可视化
-p <- DimPlot(seurat_object, reduction = "umap", group.by = "orig.ident")
-ggsave(file.path(project_dir, "umap_by_sample.png"), p, width = 10, height = 8)
-
-# 按其他因素可视化
-for (factor in c("mfield", "aging", "organ")) {
-  if (factor %in% colnames(seurat_object@meta.data)) {
-    p <- DimPlot(seurat_object, reduction = "umap", group.by = factor)
-    ggsave(file.path(project_dir, paste0("umap_by_", factor, ".png")), p, width = 10, height = 8)
-  }
-}
-
-# 保存Seurat对象
+# 保存 Seurat 对象
 saveRDS(seurat_object, file.path(project_dir, paste0("seurat_", project_name, ".rds")))
-
-# 保存配置信息用于记录
-config_info <- list(
-  project = project_name,
-  sample_conditions = sample_conditions,
-  qc_params = qc_params,
-  dim_reduction_params = dim_reduction_params,
-  clustering_resolutions = clustering_resolutions,
-  directories = list(
-    base = base_dir,
-    data = datadir,
-    results = resultdir,
-    project = project_dir
-  )
-)
-
-saveRDS(config_info, file.path(project_dir, "analysis_config.rds"))
-
-message("分析完成！结果保存在: ", project_dir)

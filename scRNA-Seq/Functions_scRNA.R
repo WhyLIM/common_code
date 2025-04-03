@@ -1,6 +1,37 @@
 
 ############################################## 单细胞分析函数 ############################################
-# 初步过滤的函数
+
+#' 执行 Seurat 对象的初步质量控制
+#'
+#' 该函数计算线粒体基因、核糖体基因和血红蛋白基因的百分比，
+#' 并生成小提琴图展示这些QC指标。
+#'
+#' @param seurat_obj 包含单细胞RNA-seq数据的Seurat对象
+#' @param dir 输出图片的保存目录路径。如果为NULL，则不保存图片
+#'
+#' @return 返回添加了QC指标的Seurat对象，包含以下新列：
+#' \itemize{
+#'   \item percent_mito - 线粒体基因百分比
+#'   \item percent_ribo - 核糖体基因百分比 
+#'   \item percent_hb - 血红蛋白基因百分比
+#' }
+#'
+#' @details
+#' 该函数会：
+#' \enumerate{
+#'   \item 计算线粒体基因(以"mt-"开头)的百分比
+#'   \item 计算核糖体基因(以"Rp[sl]"开头)的百分比
+#'   \item 计算血红蛋白基因(以"Hb"开头但不包含"p")的百分比
+#'   \item 生成包含nFeature_RNA、nCount_RNA和上述百分比的小提琴图
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' seurat_object <- basic_qc(seurat_object)
+#' seurat_object <- basic_qc(seurat_object, dir = "QC_results")
+#' }
+#'
+#' @export
 basic_qc <- function(seurat_obj, dir = NULL) {
   # 计算特定基因组的比例（线粒体、核糖体、血红蛋白）
   seurat_obj <- PercentageFeatureSet(seurat_obj, pattern = "^mt-", col.name = "percent_mito") %>% 
@@ -16,11 +47,59 @@ basic_qc <- function(seurat_obj, dir = NULL) {
   
   return(seurat_obj)
 }
-# 用法示例：
-# seurat_object <- basic_qc(seurat_object)
 
 
-# 绘制组间表达差异配对箱线图的函数
+#' 绘制组间基因表达差异的配对箱线图
+#'
+#' 该函数用于可视化不同组别间基因表达差异，特别适用于配对样本分析，
+#' 会自动标注差异显著的基因并执行配对t检验。
+#'
+#' @param seurat_object 包含单细胞 RNA-seq 数据的 Seurat 对象
+#' @param markers 差异表达分析结果数据框，需包含 p_val_adj 列
+#' @param target_genes 需要可视化的目标基因列表
+#' @param group 指定分组变量的列名（默认："group"）
+#' @param save_plot 是否保存图片（默认：TRUE）
+#' @param filename 输出文件名前缀（默认："boxpair"）
+#' @param title 图片标题（默认：空）
+#' @param width 图片宽度（单位：英寸，默认：4）
+#' @param height 图片高度（单位：英寸，默认：6）
+#' @param group_colors 自定义分组颜色向量（默认：NULL，使用 npg 调色板）
+#'
+#' @return 返回一个 ggplot 对象，包含以下元素：
+#' \itemize{
+#'   \item 配对箱线图展示各组基因平均表达
+#'   \item 显著差异基因用紫色标注（p_val_adj < 0.05）
+#'   \item 自动添加配对t检验p值
+#' }
+#'
+#' @details
+#' 函数执行流程：
+#' \enumerate{
+#'   \item 筛选存在于 seurat_object 中的目标基因
+#'   \item 筛选在 markers 中显著差异的基因（p_val_adj < 0.05）
+#'   \item 提取表达矩阵和分组信息
+#'   \item 计算各组基因平均表达值
+#'   \item 绘制配对箱线图并添加统计检验
+#'   \item 可选保存为 PDF 和 PNG 格式
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # 基本用法
+#' plot_boxpair(seurat_obj, markers = deg_results, 
+#'              target_genes = c("CD4", "CD8A", "FOXP3"))
+#'              
+#' # 自定义参数
+#' plot_boxpair(seurat_obj, markers = deg_results, 
+#'              target_genes = top_genes, group = "treatment",
+#'              group_colors = c("Control" = "grey", "Treatment" = "red"))
+#' }
+#'
+#' @importFrom dplyr filter group_by summarise across
+#' @importFrom tidyr pivot_longer
+#' @importFrom ggpubr ggpaired stat_compare_means
+#' @importFrom ggrepel geom_text_repel
+#' @export
 plot_boxpair <- function(seurat_object, markers, target_genes, group = "group", save_plot = TRUE, 
                          filename = "boxpair", title = "", width = 4, height = 6, group_colors = NULL) {
   library(dplyr)
@@ -69,13 +148,7 @@ plot_boxpair <- function(seurat_object, markers, target_genes, group = "group", 
     ggsave(filename = paste0(filename, ".pdf"), plot = p, width = width, height = height)
     ggsave(filename = paste0(filename, ".png"), plot = p, width = width, height = height)
   }
-  
 }
-# 用法示例：
-# group_colors <- c(D = "#dd5633", L = "#5fb9d4")
-# plot_boxpair(seurat_object, markers = markers, target_genes = genes_CR,
-#              group = "group", save_plot = T, filename = "boxpair_CR", 
-#              width = 6, height = 8, group_colors = group_colors)
 
 
 #' boxpair_gene_set
@@ -178,7 +251,57 @@ boxpair_gene_set <- function(seurat_list, deg_list, genes,
 }
 
 
-# 绘制基因集的基因表达图的函数
+#' 绘制基因集的表达特征图
+#'
+#' 该函数用于可视化一组基因在单细胞数据中的表达模式，自动调整图片尺寸并保存为多种格式。
+#'
+#' @param seurat_obj 包含 scRNA-seq 数据的 Seurat 对象
+#' @param genes 需要可视化的基因列表
+#' @param output_dir 输出目录路径
+#' @param file_prefix 输出文件名前缀（用于区分不同基因集）
+#' @param base_width 单个基因子图的基准宽度（单位：英寸，默认：2）
+#' @param base_height 单个基因子图的基准高度（单位：英寸，默认：2）
+#' @param ncol 每行显示的基因数量（默认：3）
+#'
+#' @return 无返回值，直接输出图片文件到指定目录
+#'
+#' @details
+#' 函数执行流程：
+#' \enumerate{
+#'   \item 检查并创建输出目录（如不存在）
+#'   \item 筛选存在于 seurat_obj 中的有效基因
+#'   \item 根据基因数量和布局参数自动计算图片尺寸
+#'   \item 生成特征表达图并添加标题
+#'   \item 保存为 PNG 和 PDF 格式（文件名自动添加前缀）
+#' }
+#'
+#' @note
+#' 重要特性：
+#' \itemize{
+#'   \item 自动跳过不存在的基因并提示
+#'   \item 图片尺寸根据基因数量和布局参数动态调整
+#'   \item 关闭了 ggsave 的尺寸限制（limitsize = FALSE）
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # 基本用法
+#' featureplot_gene_set(seurat_obj, 
+#'                     genes = c("CD4", "CD8A", "FOXP3"),
+#'                     output_dir = "results/plots",
+#'                     file_prefix = "Tcell_markers")
+#'                     
+#' # 自定义布局
+#' featureplot_gene_set(seurat_obj, 
+#'                     genes = c("CD4", "CD8A", "FOXP3", "IL2RA"),
+#'                     output_dir = "results/plots",
+#'                     file_prefix = "Tcell_markers",
+#'                     ncol = 2, 
+#'                     base_width = 3)
+#' }
+#'
+#' @importFrom Seurat FeaturePlot
+#' @export
 featureplot_gene_set <- function(seurat_obj, 
                                  genes, 
                                  output_dir, 
@@ -216,11 +339,82 @@ featureplot_gene_set <- function(seurat_obj,
   # 保存图片
   ggsave(paste0(filename, ".png"), plot = p, width = width, height = height, limitsize = FALSE)
   ggsave(paste0(filename, ".pdf"), plot = p, width = width, height = height, limitsize = FALSE)
-  
 }
 
 
-# 绘制 UMAP/T-SNE 的函数
+#' 绘制 Seurat 对象的降维可视化图（UMAP/t-SNE）
+#'
+#' 该函数提供灵活的降维可视化功能，支持自定义颜色、标签和细胞数量显示。
+#'
+#' @param seurat_obj 包含单细胞 RNA-seq 数据的 Seurat 对象
+#' @param reduction 使用的降维方法（"umap"或"tsne"，默认："umap"）
+#' @param ident 用于分组的元数据列名（默认："orig.ident"）
+#' @param pointsize 点的大小（默认：1）
+#' @param height 图片高度（单位：英寸，默认：6）
+#' @param width 图片宽度（单位：英寸，默认：7）
+#' @param filename 输出文件名前缀（默认："Dimplot"）
+#' @param custom_colors 自定义颜色向量（长度需≥分组数，默认：NULL）
+#' @param name_to_color 命名颜色向量（直接为每个分组指定颜色，默认：NULL）
+#' @param label_color 标签文本颜色（默认：'#5D478B'）
+#' @param legend_size 图例点的大小（默认：5）
+#' @param color_palette viridis 调色板选项（默认：'H'）
+#' @param show_cellnum 是否显示各分组的细胞数量（默认：FALSE）
+#' @param title 图片标题（默认：""）
+#' @param legend_title 图例标题（默认使用 ident 参数值）
+#' @param save_plot 是否保存图片（默认：TRUE）
+#'
+#' @return 返回包含以下元素的列表：
+#' \itemize{
+#'   \item plot - ggplot 对象
+#'   \item color_map - 使用的颜色映射关系
+#' }
+#'
+#' @details
+#' 颜色设置优先级：
+#' \enumerate{
+#'   \item name_to_color（直接指定分组颜色）
+#'   \item custom_colors（自定义颜色向量）
+#'   \item viridis 调色板（默认）
+#' }
+#'
+#' @section 功能特性：
+#' \itemize{
+#'   \item 自动调整图片宽度当显示细胞数量时
+#'   \item 支持三种颜色设置方式
+#'   \item 可选的细胞数量标注
+#'   \item 返回颜色映射关系便于后续使用
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # 基本用法
+#' result <- plot_seurat_dim(seurat_object, ident = "RNA_snn_res.0.8")
+#' 
+#' # 显示细胞数量
+#' plot_seurat_dim(seurat_object, show_cellnum = TRUE)
+#' 
+#' # 自定义颜色
+#' plot_seurat_dim(seurat_object,
+#'                name_to_color = c("Fibroblasts" = "blue", "Other Cells" = "#FF5733"))
+#' 
+#' # 使用 tsne 降维
+#' plot_seurat_dim(seurat_object, reduction = "tsne")
+#' 
+#' plot_seurat_dim(seurat_object, ident = "RNA_snn_res.0.8", filename = "UMAP_cluster")
+#' 
+#' name_to_color = c("Fibroblasts" = "blue", "Other Cells" = "#FF5733")
+#' plot_seurat_dim(seurat_object, reduction = "umap", ident = "RNA_snn_res.0.8", 
+#'                 height = 6, width = 7, filename = "UMAP_cluster",
+#'                 custom_colors = NULL, name_to_color = NULL, 
+#'                 label_color = '#5D478B', legend_size = 5, color_palette = 'H',
+#'                 title = "", legend_title = ident)
+#' }
+#'
+#' @importFrom ggsc sc_dim sc_dim_geom_label
+#' @importFrom ggrepel geom_text_repel
+#' @importFrom viridis viridis_pal
+#' @importFrom ggplot2 scale_color_manual guide_legend guides
+#' @export
 plot_seurat_dim <- function(seurat_obj, 
                             reduction = "umap", 
                             ident = "orig.ident", 
@@ -233,6 +427,7 @@ plot_seurat_dim <- function(seurat_obj,
                             label_color = '#5D478B',
                             legend_size = 5,
                             color_palette = 'H',
+                            show_cellnum = FALSE,
                             title = "",
                             legend_title = ident, 
                             save_plot = TRUE) { 
@@ -242,22 +437,31 @@ plot_seurat_dim <- function(seurat_obj,
   # 设置身份标识符
   Idents(seurat_obj) <- ident
   ids <- Idents(seurat_obj)
-  unique_ids <- unique(ids)
+  unique_ids <- levels(ids)
+  
+  # 如果 show_cellnum = TRUE，计算各分组的细胞数量
+  if (show_cellnum) {
+    cell_counts <- table(ids)[unique_ids]  # 按排序后的顺序提取
+    new_labels <- paste0(unique_ids, " (", cell_counts, ")")
+    width <- width + 1
+  } else {
+    new_labels <- unique_ids
+  }
   
   # 自动颜色映射逻辑
   if (!is.null(name_to_color)) {
-    color_scale <- scale_color_manual(values = name_to_color)
+    color_scale <- scale_color_manual(values = name_to_color, labels = new_labels)
     color_map <- as.list(name_to_color)
   } else if (!is.null(custom_colors)) {
     if (length(unique_ids) > length(custom_colors)) {
       stop("颜色数量少于簇的数量！")
     }
     color_map <- setNames(custom_colors, unique_ids)
-    color_scale <- scale_color_manual(values = color_map)
+    color_scale <- scale_color_manual(values = color_map, labels = new_labels)
   } else {
     color_map <- viridis::viridis_pal(option = color_palette)(length(unique_ids))
     names(color_map) <- unique_ids
-    color_scale <- scale_color_manual(values = color_map)
+    color_scale <- scale_color_manual(values = color_map, labels = new_labels)
   }
   
   # 生成可视化图
@@ -284,19 +488,68 @@ plot_seurat_dim <- function(seurat_obj,
   # 返回颜色映射关系
   return(list(plot = p, color_map = color_map))
 }
-# 用法示例：
-# plot_seurat_dim(seurat_object, ident = "RNA_snn_res.0.8", filename = "UMAP_cluster")
-# 优先级顺序：name_to_color > custom_colors >  viridis 调色板
-# name_to_color = c("Fibroblasts" = "blue", "Other Cells" = "#FF5733")
-# plot_seurat_dim(seurat_object, reduction = "umap", ident = "RNA_snn_res.0.8", 
-#                 height = 6, width = 7, filename = "UMAP_cluster",
-#                 custom_colors = NULL, name_to_color = NULL, 
-#                 label_color = '#5D478B', legend_size = 5, color_palette = 'H',
-#                 title = "", legend_title = ident)
 
 
-# 检测每个 marker 基因集的表达情况（Dotplot）的函数
-plot_markers <- function(seurat_obj, marker_list, group.by) {
+#' 绘制细胞类型标记基因表达点图
+#'
+#' 该函数用于可视化不同细胞类型的标记基因在各分组中的表达模式，自动调整图片尺寸并保存为 PDF 文件。
+#'
+#' @param seurat_obj 包含 scRNA-seq 数据的 Seurat 对象
+#' @param marker_list 包含细胞类型标记基因的列表，格式见示例
+#' @param group.by 用于分组的元数据列名
+#' @param output_dir 输出目录路径（默认："."）
+#'
+#' @return 返回包含所有绘图对象的列表（不可见），同时自动保存 PDF 文件到指定目录
+#'
+#' @details
+#' 函数执行流程：
+#' \enumerate{
+#'   \item 检查每个细胞类型的标记基因是否存在
+#'   \item 对每个细胞类型生成点图（Dotplot）
+#'   \item 自动调整图片尺寸（基于基因数量）
+#'   \item 保存为 PDF 文件（文件名包含细胞类型信息）
+#' }
+#'
+#' @section 图片特性：
+#' \itemize{
+#'   \item 点的大小表示表达比例
+#'   \item 颜色深浅表示平均表达量（绿色到红色渐变）
+#'   \item X 轴标签 45 度倾斜提高可读性
+#'   \item 标题加粗显示细胞类型
+#' }
+#'
+#' @section 动态尺寸调整规则：
+#' \itemize{
+#'   \item 宽度：max(3, n_genes * 1.2) 英寸
+#'   \item 高度：max(4, n_genes * 0.3) 英寸
+#'   \item 关闭 ggsave 的尺寸限制（limitsize = FALSE）
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # 准备标记基因列表
+#' marker_genes <- list(
+#'   T_Cell = c("Cd3g","Cd3e","Cd4","Cd8a"),
+#'   B_Cell = c("Cd19", "Cd79a", "Cd79b"),
+#'   Macrophage = c("Adgre1","Csf1r","Trem2")
+#' )
+#'
+#' # 基本用法
+#' plot_markers(seurat_object, 
+#'             marker_list = marker_genes,
+#'             group.by = "RNA_snn_res.0.8")
+#'
+#' # 指定输出目录
+#' plot_markers(seurat_object,
+#'             marker_genes,
+#'             group.by = "celltype",
+#'             output_dir = "results/marker_plots")
+#' }
+#'
+#' @importFrom ggsc sc_dot
+#' @importFrom ggplot2 scale_color_gradient ggtitle theme element_text
+#' @export
+plot_markers <- function(seurat_obj, marker_list, group.by, output_dir = ".") {
   library(ggsc)
   
   lapply(names(marker_list), function(cell_type) {
@@ -331,7 +584,7 @@ plot_markers <- function(seurat_obj, marker_list, group.by) {
     
     # 保存PDF
     ggsave(
-      filename = paste0("check_", gsub("[/]", "_", cell_type), ".pdf"),
+      filename = paste0(output_dir, "/check_", gsub("[/]", "_", cell_type), ".pdf"),
       plot = p,
       width = base_width,
       height = base_height,
@@ -341,36 +594,81 @@ plot_markers <- function(seurat_obj, marker_list, group.by) {
     return(p)
   })
 }
-# 使用示例：
-# marker_list 的格式：
-# marker_genes <- list(
-#   # T 细胞
-#   T_Cell = c("Cd3g","Cd3e","Cd4","Cd8a","Klrd1"),
-#   # NK 细胞
-#   NK_Cell = c("Ncr1", "Klrb1a", "Klrk1", "Gzmb", "Prf1"),
-#   # 浆细胞
-#   Plasma = c('Sdc1', 'Prdm1', 'Xbp1', 'Tnfrsf17'),
-#   # B 细胞
-#   B_Cell = c("Cd19", "Cd79a", "Cd79b", "Ms4a1"),
-#   # 单核/巨噬细胞
-#   Mac_Mono = c("Adgre1","Csf1r","Trem2", "Msr1"),
-#   # 树突状细胞
-#   DCs = c("Siglech", "Clec9a", "Cd209a", "Flt3"),
-#   # 中性粒细胞
-#   Neu = c("S100a8","S100a9",'Ly6g', 'Cxcr2', 'Cd177'),
-#   # 肥大细胞
-#   Mast_Cell = c("Fcer1a", "Ms4a2", "Cpa3", "Mcpt8"),
-#   # 内皮细胞
-#   Endothelial_Cells = c("Kdr","Emcn","Pecam1","Sparc"),
-#   # 红系祖细胞
-#   Erythroid_Progenitor = c("Gata1","Klf1", "Epor", "Slc4a1", "Tspo2"),
-#   # 成熟红细胞
-#   Erythrocyte = c("Hba-a1","Hba-a2","Gypa")
-# )
-# plot_markers(seurat_object, marker_genes, group.by = "RNA_snn_res.0.8")
 
 
-# 绘制基因集的小提琴图的函数
+#' 绘制基因集表达小提琴图
+#'
+#' 该函数用于可视化一组基因在不同分组中的表达分布，支持自定义分组映射和颜色，自动调整图片尺寸。
+#'
+#' @param seurat_obj 包含 scRNA-seq 数据的 Seurat 对象
+#' @param genes 需要可视化的基因向量
+#' @param filename 输出文件名前缀（不含扩展名）
+#' @param width 图片宽度（单位：英寸，NULL 时自动计算）
+#' @param height 图片高度（单位：英寸，NULL 时自动计算）
+#' @param ncol 每行显示的子图数量（默认：3）
+#' @param mapping ggplot2 映射关系（aes 对象），用于自定义 x 轴和填充变量
+#' @param group_colors 自定义分组颜色向量
+#'
+#' @return 返回 ggplot 对象，同时自动保存 PNG 和 PDF 文件
+#'
+#' @details
+#' 核心功能：
+#' \itemize{
+#'   \item 自动过滤不存在的基因
+#'   \item 支持两种绘图模式：默认分组或自定义映射
+#'   \item 自动添加组间显著性比较（p.signif）
+#'   \item X 轴标签 45 度倾斜提高可读性
+#' }
+#'
+#' @section 自动尺寸计算规则：
+#' \itemize{
+#'   \item 宽度：0.8 * 分组数量 * ncol（当 width = NULL 时）
+#'   \item 高度：4 * 行数（当 height = NULL 时）
+#'   \item 行数：ceiling(基因数量 / ncol)
+#' }
+#'
+#' @section 高级用法：
+#' \itemize{
+#'   \item 使用 mapping 参数可自定义分组变量和填充变量
+#'   \item 通过 group_colors 自定义颜色方案
+#'   \item 支持批量处理多个基因集（见示例）
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # 基本用法（使用默认分组）
+#' vlnplot_gene_set(seurat_obj, 
+#'                 genes = c("Gene1", "Gene2"), 
+#'                 filename = "my_genes")
+#'
+#' # 自定义分组和颜色
+#' my_mapping <- aes(x = cell_type, y = value, fill = condition)
+#' my_colors <- c("Type1" = "#1f77b4", "Type2" = "#ff7f0e")
+#' 
+#' vlnplot_gene_set(seurat_obj,
+#'                 genes = marker_genes,
+#'                 filename = "custom_vln",
+#'                 mapping = my_mapping,
+#'                 group_colors = my_colors)
+#'
+#' # 批量处理多个基因集
+#' gene_sets <- list(
+#'   set1 = list(genes = c("Gene1", "Gene2"), filename = "set1"),
+#'   set2 = list(genes = c("Gene3", "Gene4"), filename = "set2")
+#' )
+#' 
+#' lapply(gene_sets, function(x) {
+#'   vlnplot_gene_set(seurat_obj, 
+#'                   genes = x$genes, 
+#'                   filename = x$filename)
+#' })
+#' }
+#'
+#' @importFrom ggsc sc_violin
+#' @importFrom ggplot2 aes guide_axis scale_fill_manual
+#' @importFrom ggpubr stat_compare_means
+#' @importFrom dplyr filter
+#' @export
 vlnplot_gene_set <- function(seurat_obj, 
                              genes, 
                              filename, 
@@ -438,40 +736,6 @@ vlnplot_gene_set <- function(seurat_obj,
   
   return(p)
 }
-# 使用示例：
-## 节律基因 GO:0048511，基因太多了（300+）
-# genes_CR <- c("Arntl", "Clock", "Cry1", "Cry2", "Csnk1d", "Csnk1e", "Npas2", "Nr1d1", "Per1", "Per2", "Per3")
-## 铁硫簇组装基因 GO:0016226
-# genes_FS <- c("Abcb7", "AK157302", "Bola2", "Bola3", "Ciao1", "Ciao2a", "Ciao2b", "Ciao3", 
-#               "Ciapin1", "Fdx2", "Fxn", "Glrx3", "Glrx5", "Hscb", "Hspa9", "Iba57", "Isca1", 
-#               "Isca2", "Iscu", "Lyrm4", "Ndor1", "Ndufab1", "Ndufab1-ps", "Nfs1", "Nfu1", 
-#               "Nubp1", "Nubp2", "Nubpl", "Xdh")
-## 定义颜色
-# group_colors <- c(D = "#dd5633", L = "#5fb9d4")
-## 定义 mapping
-# mapping <- aes(x = ftype, y = value, fill = mfield)
-#
-## 单次绘图
-# vlnplot_gene_set(seurat_object, genes = genes_CR, filename = "Vlnplot_CR", ncol = 4, 
-#                  mapping = mapping, group_colors = group_colors)
-#
-## 批量绘图
-## 定义基因集列表
-# gene_sets <- list(
-#   CR = list(genes = genes_CR, filename = "Vlnplot_CR", ncol = 4, mapping = mapping, group_colors = group_colors),
-#   FS = list(genes = genes_FS, filename = "Vlnplot_FS", ncol = 6, mapping = mapping, group_colors = group_colors)
-# )
-## 批量绘图
-# lapply(gene_sets, function(x) {
-#   vlnplot_gene_set(seurat_object, 
-#                    genes = x$genes, 
-#                    filename = x$filename, 
-#                    width = x$width, 
-#                    height = x$height, 
-#                    ncol = x$ncol, 
-#                    mapping = x$mapping, 
-#                    group_colors = group_colors)
-# })
 
 
 # 自定义颜色

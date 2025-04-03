@@ -1,0 +1,22 @@
+cluster,celltype,ftype
+0,Fibroblast,Fibroblast
+1,Epithelial Cells,Epithelial Cells
+2,Myofibroblast,Myofibroblast
+3,Adipocytes,Adipocytes
+4,B Cells,Immune Cells
+5,Lymphatic Endothelial Cells,Endothelial Cells
+6,Luminal Epithelial Cells,Epithelial Cells
+7,Fibrocartilage Progenitor Cells,Fibrocartilage Progenitor Cells
+8,Astrocytes,Astrocytes
+9,Lymphatic Endothelial Cells,Endothelial Cells
+10,Fibroblast,Fibroblast
+11,Smooth Muscle Cells,Smooth Muscle Cells
+12,Basal Cells,Basal Cells
+13,Luminal Epithelial Cells,Epithelial Cells
+14,Keratinocytes,Epithelial Cells
+15,Artery Endothelial Cells,Endothelial Cells
+16,Myofibroblast,Myofibroblast
+17,Vascular Endothelial Cells,Endothelial Cells
+18,Schwann Cells,Schwann Cells
+19,Adipocytes,Adipocytes
+20,B Cells,Immune Cells
