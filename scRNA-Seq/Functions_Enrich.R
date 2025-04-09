@@ -244,61 +244,120 @@ KEGGEnrichment <- function(geneDf,
 }
 
 
-#' 通路富集分析可视化函数
-#' 
-#' @param go_df GO富集分析结果数据框，可为 NULL
-#' @param kegg_df KEGG富集分析结果数据框，可为 NULL
-#' @param top_n_per_category 每个类别保留的通路数量，默认为 5
-#' @param filter_criterion 用于筛选通路的标准，默认是 "p.adjust"
-#' @param second_criterion 相同主要筛选标准时的次要筛选标准，默认是 "Count"
-#' @param filename 输出文件名，默认为 "pathway_plot"
-#' @param width 输出图形宽度，默认为 NULL（自动计算）
-#' @param height 输出图形高度，默认为 NULL（自动计算）
-#' @param custom_colors 自定义颜色方案，默认为 NULL（使用内置颜色）
-#' @param sort_by 排序依据，默认为 "p.adjust"
-#' @param ascending 是否升序排列，默认为 TRUE（p.adjust 值小的在前）
-#' @param bar_width 条形图宽度，默认为 0.6
-#' @param text_size 通路描述文本大小，默认为 5
-#' @param gene_text_size 基因 ID 文本大小，默认为 3.5
-#' @param save_plot 是否保存绘图文件，默认为 TRUE
-#' @return ggplot对象
-#' 
+#' 绘制 GO 和 KEGG 富集分析结果的条形图
+#'
+#' 该函数接受由 clusterProfiler 生成的 GO/KEGG 富集分析结果数据框
+#' 生成带有分类标签的条形图，展示显著富集的通路
+#' 按类别分组，支持自定义颜色、排序方式和筛选标准
+#'
+#' @param go_df GO 富集分析结果数据框，必须包含 ONTOLOGY、Description、p.adjust 等列。可以为 NULL
+#' @param kegg_df KEGG 富集分析结果数据框，必须包含 Description、p.adjust 等列。可以为 NULL
+#' @param top_n_per_category 每个类别中显示的通路数量。默认为 5
+#' @param filter_criterion 用于筛选通路的统计指标，如 "p.adjust"、"pvalue" 或 "qvalue"。默认为 "p.adjust"
+#' @param x_axis_column 用于 x 轴的数值列名，可选以下列：
+#'   \itemize{
+#'     \item `"p.adjust"`：校正后的p值（默认）
+#'     \item `"pvalue"`：原始p值
+#'     \item `"qvalue"`：校正后的 q 值
+#'     \item `"FoldEnrichment"`：富集倍数
+#'     \item `"zScore"`：富集 z 分数
+#'     \item `"GeneRatio"`：基因比例（如"5/100"会自动计算为 0.05）
+#'     \item `"Count"`：差异基因数量
+#'   }
+#'   数据框中必须包含指定的列。
+#' @param x_axis_trans 数据转换方式，可选：
+#'   \itemize{
+#'     \item `"auto"`：自动选择（默认），对 p 值类（p.adjust/pvalue/qvalue）自动应用 -log10 转换
+#'     \item `"-log10"`：强制使用 -log10 转换
+#'     \item `"identity"`：不使用转换（原始值）
+#'     \item `"log2"`：log2 转换（需正数）
+#'   }
+#' @param x_axis_label x 轴标签文本。默认为 NULL 时根据`x_axis_column`自动生成：
+#'   \itemize{
+#'     \item `p.adjust` → "-log10(Adjusted P Value)"
+#'     \item `GeneRatio` → "Gene Ratio"
+#'     \item 其他列名 → 直接使用列名
+#'   }
+#'   指定该参数将覆盖自动生成的标签。
+#' @param sort_by 排序依据的列名。默认为 "p.adjust"
+#' @param filename 输出图片的文件名前缀（不包含扩展名）。默认为 "pathway_plot"
+#' @param width 图片宽度（英寸）。默认为 NULL（自动计算）
+#' @param height 图片高度（英寸）。默认为 NULL（自动计算）
+#' @param custom_colors 自定义颜色向量。默认为 NULL（使用内置配色）
+#' @param palette 内置配色方案编号（1-4）。默认为 1
+#' @param alpha 颜色透明度（0-1）。默认为 0.8
+#' @param bar_width 条形宽度（0-1）。默认为 0.6
+#' @param text_size 通路名称文本大小。默认为 5
+#' @param gene_text_size 基因 ID 文本大小。默认为 3.5
+#' @param save_plot 是否保存图片。默认为 TRUE
+#'
+#' @return 返回包含两个元素的列表：
+#' \itemize{
+#'   \item plot - ggplot2 对象，可进一步修改
+#'   \item pathway_data - 用于绘图的数据框
+#' }
+#'
 #' @examples
-#' # 基本用法 - 使用默认参数
-#' plot_pathway(go_df, kegg_df)
+#' \dontrun{
+#' # 示例 1：基本用法
+#' result <- plot_pathway(go_df = go_results, kegg_df = kegg_results)
 #' 
-#' 只展示 GO 通路，不展示 KEGG 通路
-#' plot_pathway(go_df = go_df, kegg_df = NULL)
+#' # 示例 2：只绘制 KEGG 的结果，使用 GeneRatio 作为 x 轴，显示前 10 条通路
+#' result <- plot_pathway(
+#'   kegg_df = kegg_results, 
+#'   x_axis_column = "GeneRatio",
+#'   top_n_per_category = 10,
+#'   palette = 2,
+#'   alpha = 0.6
+#' )
 #' 
-#' 每个类别选择 10 个通路
-#' plot_pathway(go_df, kegg_df, top_n_per_category = 10)
+#' # 查看绘图
+#' print(result$plot)
 #' 
-#' 使用自定义文件名和尺寸
-#' plot_pathway(go_df, kegg_df, width = 12, height = 10)
-#' 
-#' 使用其他筛选标准（如使用 pvalue 而不是 p.adjust）
-#' plot_pathway(go_df, kegg_df, filter_criterion = "pvalue", sort_by = "pvalue")
+#' # 查看绘图数据
+#' head(result$pathway_data)
+#' }
+#'
+#' @export
+#' @import dplyr
+#' @import ggplot2
+#' @importFrom gground geom_round_col geom_round_rect
+#' @importFrom tibble rowid_to_column
+#' @importFrom scales expansion
+#' @importFrom grDevices png pdf
 plot_pathway <- function(
     go_df = NULL, 
     kegg_df = NULL, 
     top_n_per_category = 5,
     filter_criterion = "p.adjust",
-    second_criterion = "Count",
+    x_axis_column = "p.adjust",
+    x_axis_trans = "auto",
+    x_axis_label = NULL,
+    sort_by = "p.adjust",
     filename = "pathway_plot",
     width = NULL, 
     height = NULL,
     custom_colors = NULL,
-    sort_by = "p.adjust",
-    ascending = TRUE,
+    palette = 1,
+    alpha = 0.8,
     bar_width = 0.6,
     text_size = 5,
     gene_text_size = 3.5,
     save_plot = TRUE
 ) {
+  library(dplyr)
+  library(ggplot2)
+  
   # 检查是否至少提供了一种数据框
   if (is.null(go_df) && is.null(kegg_df)) {
     stop("至少需要提供 GO 或 KEGG 富集分析结果数据框中的一个")
   }
+  
+  # 检查gground包是否安装
+  if (!requireNamespace("gground", quietly = TRUE)) {
+    stop("未检测到 gground 包，请使用 devtools::install_github(\"dxsbiocc/gground\") 安装")
+  }
+  library(gground)
   
   # 获取排序方向
   sort_direction <- if(ascending) 1 else -1
@@ -307,18 +366,14 @@ plot_pathway <- function(
   use_pathway <- NULL
   
   # 需要的列名
-  required_cols <- c("ONTOLOGY", "ID", "Description", "GeneRatio", "BgRatio", 
-                     "pvalue", "p.adjust", "qvalue", "geneID", "Count")
+  required_cols <- c("ONTOLOGY", "ID", "Description", "GeneRatio", "FoldEnrichment", 
+                     "zScore", "pvalue", "p.adjust", "qvalue", "geneID", "Count")
   # 处理 GO 数据框
   if (!is.null(go_df)) {
-    # 按 ONTOLOGY 分组，选取每个类别中筛选标准值最佳的通路
+    # 按 ONTOLOGY 分组，筛选每个类别中的通路
     go_filtered <- go_df %>% 
       group_by(ONTOLOGY) %>%
-      # 使用动态筛选
-      top_n(top_n_per_category, wt = sort_direction * !!sym(filter_criterion)) %>%
-      # 二级筛选标准
-      group_by(!!sym(filter_criterion)) %>%
-      top_n(1, wt = !!sym(second_criterion)) %>%
+      slice_min(order_by = !!sym(filter_criterion), n = top_n_per_category) %>% 
       ungroup() %>% 
       select(all_of(required_cols))
     # 添加到总数据框
@@ -327,14 +382,10 @@ plot_pathway <- function(
   
   # 处理 KEGG 数据框
   if (!is.null(kegg_df)) {
-    # 选取 KEGG 中筛选标准值最佳的通路
+    # 筛选 KEGG 中的通路
     kegg_filtered <- kegg_df %>%
-      top_n(top_n_per_category, wt = sort_direction * !!sym(filter_criterion)) %>%
-      # 二级筛选标准
-      group_by(!!sym(filter_criterion)) %>%
-      top_n(1, wt = !!sym(second_criterion)) %>%
       mutate(ONTOLOGY = 'KEGG') %>%  # 添加 KEGG 类别标记
-      ungroup() %>% 
+      slice_min(order_by = !!sym(filter_criterion), n = top_n_per_category) %>% 
       select(all_of(required_cols))
     # 添加到总数据框
     if (is.null(use_pathway)) {
@@ -346,32 +397,68 @@ plot_pathway <- function(
   
   # 获取所有类别
   all_categories <- unique(use_pathway$ONTOLOGY)
-  category_order <- rev(all_categories)  # 默认反转顺序，使 GO 类别在上，KEGG 在下
+  category_order <- rev(all_categories)  # 反转顺序
   
   # 处理 pathway 数据框
   use_pathway <- use_pathway %>%
     # 将 ONTOLOGY 转换为因子并指定水平顺序
     mutate(ONTOLOGY = factor(ONTOLOGY, levels = category_order)) %>%
-    # 按 ONTOLOGY 和筛选标准排序
-    arrange(ONTOLOGY, !!sym(sort_by)) %>%
+    # 按 ONTOLOGY 和筛选标准排序，为使绘图按 p 降序，此处要升序
+    arrange(ONTOLOGY, desc(!!sym(sort_by))) %>%
     # 将 Description 转换为因子，保持当前顺序
-    mutate(Description = factor(Description, levels = Description)) %>%
+    mutate(Description = factor(Description, levels = rev(Description))) %>%
     # 添加行号作为索引
     tibble::rowid_to_column('index')
   
   # 总通路数量，用于确定图形高度
   total_pathways <- nrow(use_pathway)
   
-  # 左侧分类标签和基因数量点图的宽度
-  width_factor <- 0.5
-  
-  # 计算 x 轴最大值（基于 -log10(p.adjust) 的最大值加 1）
-  if ("p.adjust" %in% colnames(use_pathway)) {
-    xaxis_max <- max(-log10(use_pathway$p.adjust)) + 1
-  } else {
-    # 如果没有 p.adjust 列，使用默认值
-    xaxis_max <- 10
+  # 处理 x 轴参数
+  if (is.null(x_axis_label)) {
+    x_axis_label <- switch(x_axis_column,
+                           "p.adjust" = "-log10(Adjusted P Value)",
+                           "pvalue" = "-log10(P Value)",
+                           "qvalue" = "-log10(Q Value)",
+                           "FoldEnrichment" = "Fold Enrichment",
+                           "zScore" = "Z Score",
+                           "GeneRatio" = "Gene Ratio",
+                           "Count" = "Gene Count",
+                           x_axis_column  # 默认直接使用列名
+    )
   }
+  
+  # 自动确定数据转换方式
+  if (x_axis_trans == "auto") {
+    x_axis_trans <- if (x_axis_column %in% c("p.adjust", "pvalue", "qvalue")) "-log10" else "identity"
+  }
+  
+  # 准备 x 轴数据
+  if (x_axis_column == "GeneRatio") {
+    use_pathway <- use_pathway %>%
+      mutate(x_value = sapply(strsplit(GeneRatio, "/"), function(x) as.numeric(x[1])/as.numeric(x[2])))
+  } else {
+    use_pathway <- use_pathway %>%
+      mutate(x_value = !!sym(x_axis_column))
+  }
+  
+  # 应用数据转换
+  if (x_axis_trans == "-log10") {
+    use_pathway <- use_pathway %>%
+      mutate(x_value = -log10(x_value))
+    # 计算 x 轴最大值并添加缓冲
+    xaxis_max <- max(use_pathway$x_value, na.rm = TRUE) * 1.1
+  } else {
+    xaxis_max <- max(use_pathway$x_value, na.rm = TRUE) * 1.1  # 默认增加 10% 空间
+  }
+  
+  # 动态计算 width_factor 以计算左侧分类标签和基因数量点图的宽度
+  width_factor <- 1/20 * max(use_pathway$x_value)
+  
+  # 计算文本位置
+  text_positions <- list(
+    desc_pos = 1/70 * max(use_pathway$x_value),  # 通路名称位置
+    gene_pos = 1/50 * max(use_pathway$x_value)   # 基因 ID 位置
+  )
   
   # 准备左侧分类标签数据
   rect.data <- use_pathway %>%
@@ -379,66 +466,63 @@ plot_pathway <- function(
     summarize(n = n(), .groups = "drop") %>%
     ungroup() %>%
     mutate(
-      xmin = -3 * width_factor,  # 矩形左侧位置
-      xmax = -2 * width_factor,  # 矩形右侧位置
+      xmin = -2.8 * width_factor,  # 矩形左侧位置
+      xmax = -2.2 * width_factor,  # 矩形右侧位置
       ymax = cumsum(n),          # 矩形上边界（累计和）
       ymin = lag(ymax, default = 0) + 0.6,  # 矩形下边界（前一个 ymax 加 0.6）
       ymax = ymax + 0.4          # 调整上边界加 0.4
     )
   
-  # 自定义颜色方案
+  # 颜色方案
   if (is.null(custom_colors)) {
+    # 内置颜色（共 16 种）
     default_colors <- c(
-      "#9584C1", "#FCBB44", "#ED6F6E", "#6CBEC3", 
-      "#FED98E", "#F28147", "#619CD9", "#EDADC5", 
-      "#9ECAE1", "#ECB884", "#92A5D1", "#E08D8B", 
-      "#AAD7C8", "#F1AEA7", "#AF8CBB", "#FAC074", 
-      "#9D9ECD", "#9FD4AE", "#D9B9D4"
+      # 色系 1（红系）
+      "#ED6F6E", "#E08D8B", "#F1AEA7", "#EDADC5",
+      # 色系 2（橙黄系）
+      "#F28147", "#ECB884", "#FAC074", "#FCBB44",
+      # 色系 3（蓝绿系）
+      "#9FD4AE", "#AAD7C8", "#6CBEC3", "#9ECAE1",
+      # 色系 4（蓝紫系）
+      "#619CD9", "#92A5D1", "#9D9ECD", "#9584C1"
     )
-    # 确保颜色数量足够
-    colors_to_use <- default_colors[1:length(all_categories)]
+    
+    # 检查 palette 是否有效
+    if (!palette %in% 1:4) {
+      stop("`palette` 必须为 1 ~ 4 之间的整数")
+    }
+    
+    # 从每个色系中选取第 palette 个颜色
+    selected_indices <- seq(palette, by = 4, length.out = 4)
+    colors_to_use <- default_colors[selected_indices]
+    
+    # 根据实际类别数截取颜色
+    n_categories <- length(all_categories)
+    colors_to_use <- colors_to_use[1:n_categories]
   } else {
-    colors_to_use <- custom_colors
+    colors_to_use <- custom_colors  # 用户自定义颜色优先
   }
   
-  # 检查是否加载了 gground 包（用于 geom_round_col 和 geom_round_rect）
-  if (!requireNamespace("gground", quietly = TRUE)) {
-    message("未检测到 gground 包，尝试使用 geom_col 和 geom_rect 替代...")
-    # 创建 ggplot 对象（无圆角）
-    p <- ggplot(use_pathway, aes(-log10(p.adjust), y = index, fill = ONTOLOGY)) +
-      # 添加条形图（使用普通矩形）
-      geom_col(aes(y = Description), width = bar_width, alpha = 0.8)
-    
-    # 添加左侧分类标签（矩形，无圆角）
-    p <- p + geom_rect(
-      aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = ONTOLOGY),
-      data = rect.data, inherit.aes = FALSE
-    )
-  } else {
-    # 创建 ggplot 对象（带圆角）
-    p <- ggplot(use_pathway, aes(-log10(p.adjust), y = index, fill = ONTOLOGY)) +
-      # 添加条形图（使用圆角矩形）
-      gground::geom_round_col(aes(y = Description), width = bar_width, alpha = 0.8)
-    
+  # 创建 ggplot 对象
+  p <- ggplot(use_pathway, aes(x = x_value, y = index, fill = ONTOLOGY)) +
+    # 添加条形图（圆角矩形）
+    gground::geom_round_col(aes(y = Description), width = bar_width, alpha = alpha) +
+    scale_y_discrete(limits = rev) +
     # 添加左侧分类标签（圆角矩形）
-    p <- p + gground::geom_round_rect(
+    gground::geom_round_rect(
       aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = ONTOLOGY),
-      data = rect.data, radius = unit(2, 'mm'), inherit.aes = FALSE
-    )
-  }
-  
-  # 添加其他图层
-  p <- p +
+      data = rect.data, radius = unit(2, 'mm'), inherit.aes = FALSE, alpha = alpha
+    ) +
     # 添加通路名称文本（左侧对齐）
-    geom_text(aes(x = 0.05, label = Description), hjust = 0, size = text_size) +
+    geom_text(aes(x = text_positions$desc_pos, label = Description), hjust = 0, size = text_size) +
     # 添加基因 ID 文本（斜体，小字号）
     geom_text(
-      aes(x = 0.1, label = geneID, colour = ONTOLOGY), 
+      aes(x = text_positions$gene_pos, label = geneID, colour = ONTOLOGY), 
       hjust = 0, vjust = 3, size = gene_text_size, fontface = 'italic', 
       show.legend = FALSE
     ) +
     # 添加基因数量点图
-    geom_point(aes(x = -width_factor, size = Count), shape = 21) +
+    geom_point(aes(x = -width_factor, size = Count), shape = 21, alpha = alpha) +
     # 添加基因数量文本
     geom_text(aes(x = -width_factor, label = Count)) +
     # 设置点的大小范围
@@ -446,12 +530,7 @@ plot_pathway <- function(
     # 添加分类标签文本
     geom_text(
       aes(x = (xmin + xmax) / 2, y = (ymin + ymax) / 2, label = ONTOLOGY),
-      data = rect.data, inherit.aes = FALSE
-    ) +
-    # 添加 x 轴线
-    geom_segment(
-      aes(x = 0, y = 0, xend = xaxis_max, yend = 0),
-      linewidth = 1.5, inherit.aes = FALSE
+      data = rect.data, inherit.aes = FALSE, angle = 90
     ) +
     # 设置 y 轴标签为空
     labs(y = NULL) +
@@ -459,15 +538,21 @@ plot_pathway <- function(
     scale_fill_manual(name = 'Category', values = colors_to_use) +
     # 设置文本颜色
     scale_colour_manual(values = colors_to_use) +
-    # 设置x轴刻度和扩展
-    scale_x_continuous(
-      name = "-log10(p.adjust)",
-      breaks = seq(0, ceiling(xaxis_max), 2), 
-      expand = expansion(c(0, 0))
-    ) +
-    # 使用经典主题
+    # 设置 x 轴刻度和扩展
+    (if (x_axis_trans == "-log10") {
+      scale_x_continuous(
+        name = x_axis_label,
+        expand = expansion(c(0, 0.05))
+      )
+    } else {
+      scale_x_continuous(
+        name = x_axis_label,
+        expand = expansion(c(0, 0.05))
+      )
+    }) +
+    # 添加 x 轴线
+    annotate("segment", x = 0, y = 0, xend = xaxis_max, yend = 0, linewidth = 1.5) +
     theme_classic() +
-    # 自定义主题设置
     theme(
       axis.text.y = element_blank(),  # 隐藏 y 轴文本
       axis.line = element_blank(),    # 隐藏轴线
@@ -485,12 +570,11 @@ plot_pathway <- function(
   }
   
   if (save_plot) {
-    # 保存图形
     ggsave(paste0(filename, ".png"), p, width = width, height = height)
     ggsave(paste0(filename, ".pdf"), p, width = width, height = height)
   }
   
-  return(p)
+  return(list(plot = p, pathway_data = use_pathway))
 }
 
 
