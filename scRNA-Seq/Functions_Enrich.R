@@ -340,6 +340,7 @@ plot_pathway <- function(
     custom_colors = NULL,
     palette = 1,
     alpha = 0.8,
+    show_genes = 15,
     bar_width = 0.6,
     text_size = 5,
     gene_text_size = 3.5,
@@ -359,15 +360,14 @@ plot_pathway <- function(
   }
   library(gground)
   
-  # 获取排序方向
-  sort_direction <- if(ascending) 1 else -1
-  
   # 构建完整通路数据框
   use_pathway <- NULL
   
   # 需要的列名
-  required_cols <- c("ONTOLOGY", "ID", "Description", "GeneRatio", "FoldEnrichment", 
-                     "zScore", "pvalue", "p.adjust", "qvalue", "geneID", "Count")
+  # required_cols <- c("ONTOLOGY", "ID", "Description", "GeneRatio", "FoldEnrichment", 
+  #                    "zScore", "pvalue", "p.adjust", "qvalue", "geneID", "Count")
+  required_cols <- c("ONTOLOGY", "ID", "Description", "geneID", "Count", filter_criterion, x_axis_column, sort_by) %>% 
+    unique()
   # 处理 GO 数据框
   if (!is.null(go_df)) {
     # 按 ONTOLOGY 分组，筛选每个类别中的通路
@@ -502,6 +502,16 @@ plot_pathway <- function(
   } else {
     colors_to_use <- custom_colors  # 用户自定义颜色优先
   }
+  
+  # 最多展示的基因数量
+  use_pathway <- use_pathway %>%
+    mutate(
+      geneID = map_chr(
+        str_split(geneID, "/"),   # 按 "/" 分割成列表
+        ~ head(.x, show_genes) %>%        # 取前15个基因
+          str_c(collapse = "/")   # 用 "/" 合并回字符串
+      )
+    )
   
   # 创建 ggplot 对象
   p <- ggplot(use_pathway, aes(x = x_value, y = index, fill = ONTOLOGY)) +
