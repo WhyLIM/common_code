@@ -334,6 +334,8 @@ plot_pathway <- function(
     x_axis_trans = "auto",
     x_axis_label = NULL,
     sort_by = "p.adjust",
+    title = NULL,
+    subtitle = NULL,
     filename = "pathway_plot",
     width = NULL, 
     height = NULL,
@@ -543,7 +545,7 @@ plot_pathway <- function(
       data = rect.data, inherit.aes = FALSE, angle = 90
     ) +
     # 设置 y 轴标签为空
-    labs(y = NULL) +
+    labs(y = NULL, title = title, subtitle = subtitle) +
     # 设置填充颜色和图例标题
     scale_fill_manual(name = 'Category', values = colors_to_use) +
     # 设置文本颜色
@@ -567,7 +569,9 @@ plot_pathway <- function(
       axis.text.y = element_blank(),  # 隐藏 y 轴文本
       axis.line = element_blank(),    # 隐藏轴线
       axis.ticks.y = element_blank(), # 隐藏 y 轴刻度
-      legend.title = element_text()   # 设置图例标题文本
+      legend.title = element_text(),  # 设置图例标题文本
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 14),  # 标题居中加粗
+      plot.subtitle = element_text(hjust = 0.5, size = 12)  # 副标题居中
     )
   
   # 自动计算合适的图形尺寸
